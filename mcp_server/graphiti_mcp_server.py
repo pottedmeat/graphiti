@@ -699,7 +699,7 @@ async def add_memory(
     uuid: str | None = None,
     entity_types: dict[str, dict] | None = None,
     edge_types: dict[str, dict] | None = None,
-    edge_type_map: dict[str, str] | None = None,
+    edge_type_map: list[list[str]] | None = None,
 ) -> SuccessResponse | ErrorResponse:
     """Add an episode to memory. This is the primary way to add information to the graph.
 
@@ -723,7 +723,9 @@ async def add_memory(
                                                  These schemas will be converted to Pydantic models for entity extraction.
         edge_types (dict[str, dict], optional): Dictionary mapping edge type names to JSON schema definitions.
                                                These schemas will be converted to Pydantic models for relationship extraction.
-        edge_type_map (dict[str, str], optional): Mapping between edge types and their implementations
+        edge_type_map (list[list[str]], optional): Mapping between edge types and their implementations.
+                                                   The first two elements of each sublist are the entity type names,
+                                                   and the remaining elements are the edge type names.
 
     Examples:
         # Adding plain text content
@@ -815,6 +817,7 @@ async def add_memory(
                 logger.info(f"Processing queued episode '{name}' for group_id: {group_id_str}")
 
                 # Convert JSON schemas to Pydantic models for entity types
+                entity_types_dict = {}
                 if entity_types:
                     try:
                         for entity_name, schema in entity_types.items():
@@ -848,6 +851,12 @@ async def add_memory(
                     except Exception as schema_error:
                         logger.error(f"Error processing edge schemas: {str(schema_error)}")
 
+                # Convert flast lists to a dict with two-element tuple keys and the remaining elements as their value
+                edge_type_map_dict = {
+                    (edge_type_map[i][0], edge_type_map[i][1]): edge_type_map[i][2:]
+                    for i in range(len(edge_type_map))
+                }
+
                 await client.add_episode(
                     name=name,
                     episode_body=episode_body,
@@ -857,8 +866,8 @@ async def add_memory(
                     uuid=uuid,
                     reference_time=datetime.now(timezone.utc),
                     entity_types=entity_types_dict,
-                    edge_types=edge_types_dict if edge_types_dict else None,
-                    edge_type_map=edge_type_map,
+                    edge_types=edge_types_dict,
+                    edge_type_map=edge_type_map_dict,
                 )
                 logger.info(f"Episode '{name}' added successfully")
 
