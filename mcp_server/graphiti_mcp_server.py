@@ -197,10 +197,12 @@ class GraphitiLLMConfig(BaseModel):
     model: str = DEFAULT_LLM_MODEL
     small_model: str = SMALL_LLM_MODEL
     temperature: float = 0.0
+    max_tokens: int | None = None
     azure_openai_endpoint: str | None = None
     azure_openai_deployment_name: str | None = None
     azure_openai_api_version: str | None = None
     azure_openai_use_managed_identity: bool = False
+    azure_openai_max_tokens: int | None = None
 
     @classmethod
     def from_env(cls) -> 'GraphitiLLMConfig':
@@ -213,12 +215,18 @@ class GraphitiLLMConfig(BaseModel):
         small_model_env = os.environ.get('SMALL_MODEL_NAME', '')
         small_model = small_model_env if small_model_env.strip() else SMALL_LLM_MODEL
 
+        # Get max_tokens from environment if set
+        max_tokens_str = os.environ.get('OPENAI_MAX_TOKENS')
+        max_tokens = int(max_tokens_str) if max_tokens_str and max_tokens_str.strip().isdigit() else None
+
         azure_openai_endpoint = os.environ.get('AZURE_OPENAI_ENDPOINT', None)
         azure_openai_api_version = os.environ.get('AZURE_OPENAI_API_VERSION', None)
         azure_openai_deployment_name = os.environ.get('AZURE_OPENAI_DEPLOYMENT_NAME', None)
         azure_openai_use_managed_identity = (
             os.environ.get('AZURE_OPENAI_USE_MANAGED_IDENTITY', 'false').lower() == 'true'
         )
+        azure_openai_max_tokens_str = os.environ.get('AZURE_OPENAI_MAX_TOKENS')
+        azure_openai_max_tokens = int(azure_openai_max_tokens_str) if azure_openai_max_tokens_str and azure_openai_max_tokens_str.strip().isdigit() else None
 
         if azure_openai_endpoint is None:
             # Setup for OpenAI API
@@ -237,6 +245,7 @@ class GraphitiLLMConfig(BaseModel):
                 model=model,
                 small_model=small_model,
                 temperature=float(os.environ.get('LLM_TEMPERATURE', '0.0')),
+                max_tokens=max_tokens,
             )
         else:
             # Setup for Azure OpenAI API
@@ -261,6 +270,7 @@ class GraphitiLLMConfig(BaseModel):
                 model=model,
                 small_model=small_model,
                 temperature=float(os.environ.get('LLM_TEMPERATURE', '0.0')),
+                max_tokens=azure_openai_max_tokens,
             )
 
     @classmethod
@@ -286,6 +296,10 @@ class GraphitiLLMConfig(BaseModel):
 
         if hasattr(args, 'temperature') and args.temperature is not None:
             config.temperature = args.temperature
+            
+        if hasattr(args, 'max_tokens') and args.max_tokens is not None:
+            config.max_tokens = args.max_tokens
+            config.azure_openai_max_tokens = args.max_tokens
 
         return config
 
@@ -313,6 +327,7 @@ class GraphitiLLMConfig(BaseModel):
                         model=self.model,
                         small_model=self.small_model,
                         temperature=self.temperature,
+                        max_tokens=self.azure_openai_max_tokens,
                     ),
                 )
             elif self.api_key:
@@ -329,6 +344,7 @@ class GraphitiLLMConfig(BaseModel):
                         model=self.model,
                         small_model=self.small_model,
                         temperature=self.temperature,
+                        max_tokens=self.azure_openai_max_tokens,
                     ),
                 )
             else:
@@ -338,7 +354,10 @@ class GraphitiLLMConfig(BaseModel):
             raise ValueError('OPENAI_API_KEY must be set when using OpenAI API')
 
         llm_client_config = LLMConfig(
-            api_key=self.api_key, model=self.model, small_model=self.small_model
+            api_key=self.api_key, 
+            model=self.model, 
+            small_model=self.small_model,
+            max_tokens=self.max_tokens,
         )
 
         # Set temperature
@@ -1272,6 +1291,11 @@ async def initialize_server() -> MCPConfig:
         '--temperature',
         type=float,
         help='Temperature setting for the LLM (0.0-2.0). Lower values make output more deterministic. (default: 0.7)',
+    )
+    parser.add_argument(
+        '--max-tokens',
+        type=int,
+        help='Maximum number of tokens for LLM responses. If not provided, uses OPENAI_MAX_TOKENS or AZURE_OPENAI_MAX_TOKENS environment variable.',
     )
     parser.add_argument('--destroy-graph', action='store_true', help='Destroy all Graphiti graphs')
     parser.add_argument(
