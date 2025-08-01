@@ -299,7 +299,6 @@ class GraphitiLLMConfig(BaseModel):
             
         if hasattr(args, 'max_tokens') and args.max_tokens is not None:
             config.max_tokens = args.max_tokens
-            config.azure_openai_max_tokens = args.max_tokens
 
         return config
 
@@ -362,6 +361,9 @@ class GraphitiLLMConfig(BaseModel):
 
         # Set temperature
         llm_client_config.temperature = self.temperature
+
+        # Set max tokens
+        llm_client_config.max_tokens = self.max_tokens
 
         return OpenAIClient(config=llm_client_config)
 
