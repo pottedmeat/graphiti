@@ -880,6 +880,32 @@ async def add_memory(
 
                 logger.info(f"Entity types: {entity_types_dict}")
                 logger.info(f"Edge types: {edge_types_dict}")
+                
+                # Log the first model in each dictionary if available
+                if entity_types_dict:
+                    first_entity_key = next(iter(entity_types_dict))
+                    first_entity_model = entity_types_dict[first_entity_key]
+                    logger.info(f"First entity model: {first_entity_key}")
+                    # Log model fields and their types
+                    field_info = {name: f"{field.annotation}" for name, field in first_entity_model.model_fields.items()}
+                    logger.info(f"Fields: {field_info}")
+                    # Log schema in a more readable format
+                    schema = first_entity_model.model_json_schema()
+                    logger.info(f"Required fields: {schema.get('required', [])}")
+                    logger.info(f"Properties: {list(schema.get('properties', {}).keys())}")
+                
+                if edge_types_dict:
+                    first_edge_key = next(iter(edge_types_dict))
+                    first_edge_model = edge_types_dict[first_edge_key]
+                    logger.info(f"First edge model: {first_edge_key}")
+                    # Log model fields and their types
+                    field_info = {name: f"{field.annotation}" for name, field in first_edge_model.model_fields.items()}
+                    logger.info(f"Fields: {field_info}")
+                    # Log schema in a more readable format
+                    schema = first_edge_model.model_json_schema()
+                    logger.info(f"Required fields: {schema.get('required', [])}")
+                    logger.info(f"Properties: {list(schema.get('properties', {}).keys())}")
+                
                 logger.info(f"Edge type map: {edge_type_map_dict}")
 
                 await client.add_episode(
