@@ -878,6 +878,10 @@ async def add_memory(
                     for i in range(len(edge_type_map))
                 }
 
+                logger.info(f"Entity types: {entity_types_dict}")
+                logger.info(f"Edge types: {edge_types_dict}")
+                logger.info(f"Edge type map: {edge_type_map_dict}")
+
                 await client.add_episode(
                     name=name,
                     episode_body=episode_body,
