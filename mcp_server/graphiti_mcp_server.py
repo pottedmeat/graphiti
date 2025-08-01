@@ -564,18 +564,7 @@ API keys are provided for any language model operations.
 """
 
 # MCP server instance
-class SessionAwareMCP(FastMCP):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.active_sessions = {}
-    
-    async def validate_session(self, session_id: str) -> bool:
-        if session_id not in self.active_sessions:
-            logger.warning(f"Session not found: {session_id}")
-            return False
-        return True
-
-mcp = SessionAwareMCP(
+mcp = FastMCP(
     'Graphiti Agent Memory',
     instructions=GRAPHITI_MCP_INSTRUCTIONS,
 )
