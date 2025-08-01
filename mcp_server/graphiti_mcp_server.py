@@ -14,6 +14,7 @@ from typing import Any, TypedDict, cast
 
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv
+from json_schema_to_pydantic import create_model as create_pydantic_model_from_schema
 from mcp.server.fastmcp import FastMCP
 from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
@@ -696,6 +697,9 @@ async def add_memory(
     source: str = 'text',
     source_description: str = '',
     uuid: str | None = None,
+    entity_types: dict[str, dict] | None = None,
+    edge_types: dict[str, dict] | None = None,
+    edge_type_map: dict[str, str] | None = None,
 ) -> SuccessResponse | ErrorResponse:
     """Add an episode to memory. This is the primary way to add information to the graph.
 
@@ -715,6 +719,11 @@ async def add_memory(
                                - 'message': For conversation-style content
         source_description (str, optional): Description of the source
         uuid (str, optional): Optional UUID for the episode
+        entity_types (dict[str, dict], optional): Dictionary mapping entity type names to JSON schema definitions.
+                                                 These schemas will be converted to Pydantic models for entity extraction.
+        edge_types (dict[str, dict], optional): Dictionary mapping edge type names to JSON schema definitions.
+                                               These schemas will be converted to Pydantic models for relationship extraction.
+        edge_type_map (dict[str, str], optional): Mapping between edge types and their implementations
 
     Examples:
         # Adding plain text content
@@ -743,6 +752,22 @@ async def add_memory(
             source_description="chat transcript",
             group_id="some_arbitrary_string"
         )
+        
+        # Adding with custom entity types defined by JSON schemas
+        add_memory(
+            name="Product Information",
+            episode_body="Our new widget comes in red, blue, and green colors.",
+            entity_types={
+                "Product": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Product name"},
+                        "colors": {"type": "array", "items": {"type": "string"}, "description": "Available colors"}
+                    },
+                    "required": ["name"]
+                }
+            }
+        )
 
     Notes:
         When using source='json':
@@ -751,6 +776,11 @@ async def add_memory(
         - Complex nested structures are supported (arrays, nested objects, mixed data types), but keep nesting to a minimum
         - Entities will be created from appropriate JSON properties
         - Relationships between entities will be established based on the JSON structure
+        
+        When using entity_types or edge_types:
+        - Each value should be a valid JSON Schema object
+        - The schemas will be converted to Pydantic models for entity extraction
+        - Each schema must have "type": "object" and a "properties" object
     """
     global graphiti_client, episode_queues, queue_workers
 
@@ -783,8 +813,40 @@ async def add_memory(
         async def process_episode():
             try:
                 logger.info(f"Processing queued episode '{name}' for group_id: {group_id_str}")
-                # Use all entity types if use_custom_entities is enabled, otherwise use empty dict
-                entity_types = ENTITY_TYPES if config.use_custom_entities else {}
+
+                # Convert JSON schemas to Pydantic models for entity types
+                if entity_types:
+                    try:
+                        for entity_name, schema in entity_types.items():
+                            try:
+                                # Create Pydantic model from JSON schema
+                                model = create_pydantic_model_from_schema(schema)
+                                entity_types_dict[entity_name] = model
+                                logger.info(f"Created dynamic entity type: {entity_name}")
+                            except Exception as schema_error:
+                                logger.error(f"Error creating entity type '{entity_name}': {str(schema_error)}")
+                                # Continue with other schemas even if one fails
+                    except Exception as schema_error:
+                        logger.error(f"Error processing entity schemas: {str(schema_error)}")
+                else:
+                    # Initialize entity_types_dict with predefined types if enabled
+                    entity_types_dict = ENTITY_TYPES if config.use_custom_entities else {}
+                
+                # Convert JSON schemas to Pydantic models for edge types
+                edge_types_dict = {}
+                if edge_types:
+                    try:
+                        for edge_name, schema in edge_types.items():
+                            try:
+                                # Create Pydantic model from JSON schema
+                                model = create_pydantic_model_from_schema(schema)
+                                edge_types_dict[edge_name] = model
+                                logger.info(f"Created dynamic edge type: {edge_name}")
+                            except Exception as schema_error:
+                                logger.error(f"Error creating edge type '{edge_name}': {str(schema_error)}")
+                                # Continue with other schemas even if one fails
+                    except Exception as schema_error:
+                        logger.error(f"Error processing edge schemas: {str(schema_error)}")
 
                 await client.add_episode(
                     name=name,
@@ -794,7 +856,9 @@ async def add_memory(
                     group_id=group_id_str,  # Using the string version of group_id
                     uuid=uuid,
                     reference_time=datetime.now(timezone.utc),
-                    entity_types=entity_types,
+                    entity_types=entity_types_dict,
+                    edge_types=edge_types_dict if edge_types_dict else None,
+                    edge_type_map=edge_type_map,
                 )
                 logger.info(f"Episode '{name}' added successfully")
 
@@ -816,9 +880,20 @@ async def add_memory(
         if not queue_workers.get(group_id_str, False):
             asyncio.create_task(process_episode_queue(group_id_str))
 
+        # Prepare message with information about dynamic types
+        message_parts = [f"Episode '{name}' queued for processing (position: {episode_queues[group_id_str].qsize()})"]
+        
+        if entity_types:
+            entity_count = len(entity_types)
+            message_parts.append(f"with {entity_count} custom entity type{'s' if entity_count > 1 else ''}")
+        
+        if edge_types:
+            edge_count = len(edge_types)
+            message_parts.append(f"with {edge_count} custom edge type{'s' if edge_count > 1 else ''}")
+        
         # Return immediately with a success message
         return SuccessResponse(
-            message=f"Episode '{name}' queued for processing (position: {episode_queues[group_id_str].qsize()})"
+            message=" ".join(message_parts)
         )
     except Exception as e:
         error_msg = str(e)
