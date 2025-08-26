@@ -395,6 +395,7 @@ class Graphiti:
         update_communities: bool = False,
         entity_types: dict[str, type[BaseModel]] | None = None,
         excluded_entity_types: list[str] | None = None,
+        excluded_dedupe_entity_types: list[str] | None = None,
         previous_episode_uuids: list[str] | None = None,
         edge_types: dict[str, type[BaseModel]] | None = None,
         edge_type_map: dict[tuple[str, str], list[str]] | None = None,
@@ -463,6 +464,7 @@ class Graphiti:
             validate_entity_types(entity_types)
 
             validate_excluded_entity_types(excluded_entity_types, entity_types)
+            validate_excluded_entity_types(excluded_dedupe_entity_types, entity_types)
             validate_group_id(group_id)
 
             previous_episodes = (
@@ -512,6 +514,7 @@ class Graphiti:
                     episode,
                     previous_episodes,
                     entity_types,
+                    excluded_dedupe_entity_types=excluded_dedupe_entity_types,
                 ),
                 extract_edges(
                     self.clients,
