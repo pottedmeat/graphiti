@@ -302,6 +302,9 @@ async def resolve_extracted_nodes(
             else extracted_node
         )
 
+        if any(label in excluded_dedupe_entity_types for label in resolved_node.labels):
+            continue
+
         # resolved_node.name = resolution.get('name')
 
         resolved_nodes.append(resolved_node)
