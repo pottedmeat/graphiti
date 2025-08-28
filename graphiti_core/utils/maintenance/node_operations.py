@@ -253,7 +253,7 @@ async def resolve_extracted_nodes(
                 },
                 **candidate.attributes,
             }
-            for i, candidate in resolvable_nodes
+            for i, candidate in enumerate(existing_nodes)
         ],
     )
 
