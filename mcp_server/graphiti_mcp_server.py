@@ -122,7 +122,7 @@ class Procedure(BaseModel):
     )
 
 
-ENTITY_TYPES: dict[str, BaseModel] = {
+ENTITY_TYPES: dict[str, type[BaseModel]] = {
     'Requirement': Requirement,  # type: ignore
     'Preference': Preference,  # type: ignore
     'Procedure': Procedure,  # type: ignore
