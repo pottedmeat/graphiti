@@ -274,8 +274,6 @@ async def resolve_extracted_edges(
 
     # Determine which edge types are relevant for each edge
     edge_types_lst: list[dict[str, type[BaseModel]]] = []
-    open_for_new_node_flags: list[bool] = []
-    has_allowed_mapping_flags: list[bool] = []
     for extracted_edge in extracted_edges:
         source_node = uuid_entity_map.get(extracted_edge.source_node_uuid)
         target_node = uuid_entity_map.get(extracted_edge.target_node_uuid)
@@ -292,7 +290,6 @@ async def resolve_extracted_edges(
         ]
 
         extracted_edge_types = {}
-        has_allowed_mapping = False
         for label_tuple in label_tuples:
             type_names = edge_type_map.get(label_tuple, [])
             for type_name in type_names:
@@ -301,31 +298,8 @@ async def resolve_extracted_edges(
                     continue
 
                 extracted_edge_types[type_name] = type_model
-                has_allowed_mapping = True
-
-        # Also check the reverse direction for a mapping
-        if not has_allowed_mapping:
-            for label_tuple in label_tuples:
-                reversed_tuple = (label_tuple[1], label_tuple[0])
-                type_names = edge_type_map.get(reversed_tuple, [])
-                for type_name in type_names:
-                    type_model = edge_types.get(type_name)
-                    if type_model is None:
-                        continue
-                    extracted_edge_types[type_name] = type_model
-                    has_allowed_mapping = True
 
         edge_types_lst.append(extracted_edge_types)
-        open_for_new_node_flags.append(not has_allowed_mapping)
-        has_allowed_mapping_flags.append(has_allowed_mapping)
-
-    # Enforce allowlist: keep only edges that have an allowed mapping in either direction
-    filtered_indices = [i for i, allowed in enumerate(has_allowed_mapping_flags) if allowed]
-
-    filtered_extracted_edges = [extracted_edges[i] for i in filtered_indices]
-    filtered_related_edges_lists = [related_edges_lists[i] for i in filtered_indices]
-    filtered_edge_invalidation_candidates = [edge_invalidation_candidates[i] for i in filtered_indices]
-    filtered_edge_types_lst = [edge_types_lst[i] for i in filtered_indices]
 
     # resolve edges with related edges in the graph and find invalidation candidates
     results: list[tuple[EntityEdge, list[EntityEdge], list[EntityEdge]]] = list(
@@ -341,10 +315,10 @@ async def resolve_extracted_edges(
                     clients.ensure_ascii,
                 )
                 for extracted_edge, related_edges, existing_edges, extracted_edge_types in zip(
-                    filtered_extracted_edges,
-                    filtered_related_edges_lists,
-                    filtered_edge_invalidation_candidates,
-                    filtered_edge_types_lst,
+                    extracted_edges,
+                    related_edges_lists,
+                    edge_invalidation_candidates,
+                    edge_types_lst,
                     strict=True,
                 )
             ]
@@ -353,16 +327,9 @@ async def resolve_extracted_edges(
 
     resolved_edges: list[EntityEdge] = []
     invalidated_edges: list[EntityEdge] = []
-    for i, result in enumerate(results):
+    for result in results:
         resolved_edge = result[0]
         invalidated_edge_chunk = result[1]
-
-        # If no allowed mapping existed for this edge in either direction (in original list),
-        # mark the edge to indicate it should be considered for new node creation downstream.
-        original_index = filtered_indices[i]
-        if open_for_new_node_flags[original_index]:
-            resolved_edge.attributes = resolved_edge.attributes or {}
-            resolved_edge.attributes['open_for_new_node'] = True
 
         resolved_edges.append(resolved_edge)
         invalidated_edges.extend(invalidated_edge_chunk)
