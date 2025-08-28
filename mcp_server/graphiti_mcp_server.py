@@ -197,6 +197,7 @@ class GraphitiLLMConfig(BaseModel):
     model: str = DEFAULT_LLM_MODEL
     small_model: str = SMALL_LLM_MODEL
     temperature: float = 0.0
+    reasoning: str | None = None
     azure_openai_endpoint: str | None = None
     azure_openai_deployment_name: str | None = None
     azure_openai_api_version: str | None = None
@@ -237,6 +238,7 @@ class GraphitiLLMConfig(BaseModel):
                 model=model,
                 small_model=small_model,
                 temperature=float(os.environ.get('LLM_TEMPERATURE', '0.0')),
+                reasoning=os.environ.get('LLM_REASONING'),
             )
         else:
             # Setup for Azure OpenAI API
@@ -286,6 +288,9 @@ class GraphitiLLMConfig(BaseModel):
 
         if hasattr(args, 'temperature') and args.temperature is not None:
             config.temperature = args.temperature
+
+        if hasattr(args, 'reasoning') and args.reasoning is not None:
+            config.reasoning = args.reasoning
 
         return config
 
@@ -343,6 +348,9 @@ class GraphitiLLMConfig(BaseModel):
 
         # Set temperature
         llm_client_config.temperature = self.temperature
+
+        if self.reasoning:
+            return OpenAIClient(config=llm_client_config, reasoning=self.reasoning)
 
         return OpenAIClient(config=llm_client_config)
 
