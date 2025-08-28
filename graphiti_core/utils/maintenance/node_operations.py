@@ -79,8 +79,9 @@ async def extract_nodes(
     custom_prompt = ''
     entities_missed = True
     reflexion_iterations = 0
+    excluded_default_entity_type = 'Entity' in excluded_entity_types if excluded_entity_types is not None else False
 
-    entity_types_context = [
+    entity_types_context = [] if excluded_default_entity_type else [
         {
             'entity_type_id': 0,
             'entity_type_name': 'Entity',
@@ -91,7 +92,7 @@ async def extract_nodes(
     entity_types_context += (
         [
             {
-                'entity_type_id': i + 1,
+                'entity_type_id': i + (1 if not excluded_default_entity_type else 0),
                 'entity_type_name': type_name,
                 'entity_type_description': type_model.__doc__,
             }
