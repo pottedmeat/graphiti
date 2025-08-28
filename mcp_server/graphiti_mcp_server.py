@@ -4,6 +4,7 @@ Graphiti MCP Server - Exposes Graphiti functionality through the Model Context P
 """
 
 import argparse
+import json
 import asyncio
 import logging
 import os
@@ -571,6 +572,10 @@ mcp = FastMCP(
 # Initialize Graphiti client
 graphiti_client: Graphiti | None = None
 
+# Ontology storage configuration and lock for concurrency-safe writes
+ONTOLOGIES_FILE = os.path.join(os.path.dirname(__file__), 'ontologies.json')
+ontologies_lock = asyncio.Lock()
+
 
 async def initialize_graphiti():
     """Initialize the Graphiti client with the configured settings."""
@@ -1127,6 +1132,69 @@ async def clear_graph() -> SuccessResponse | ErrorResponse:
         error_msg = str(e)
         logger.error(f'Error clearing graph: {error_msg}')
         return ErrorResponse(error=f'Error clearing graph: {error_msg}')
+
+
+@mcp.tool()
+async def register_ontology(
+    name: str,
+    entity_types: dict[str, str] | None = None,
+    edge_types: dict[str, str] | None = None,
+    edge_type_map: list[str] | None = None,
+) -> SuccessResponse | ErrorResponse:
+    """Register or update an ontology definition.
+
+    Stores all ontologies in a single JSON file as a dictionary keyed by name.
+    Each value is an object: {"entity_types", "edge_types", "edge_type_map"}.
+
+    Args:
+        name: Ontology name key.
+        entity_types: Mapping of entity type names to their JSON schemas.
+        edge_types: Mapping of edge type names to their JSON schemas.
+        edge_type_map: Mapping of source and target entity types to the edge types that connect them where the first item is the source entity type, the second item is the target entity type, and the remaining items are the edge types that can connect them.
+    """
+
+    try:
+        cleaned_name = name.strip()
+        if cleaned_name == '':
+            return ErrorResponse(error='name must be a non-empty string')
+
+        async with ontologies_lock:
+            # Load existing ontologies (if any)
+            def _read_file() -> dict[str, dict[str, object]]:
+                try:
+                    if not os.path.exists(ONTOLOGIES_FILE):
+                        return {}
+                    with open(ONTOLOGIES_FILE, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, dict):
+                            return data
+                        return {}
+                except Exception:
+                    return {}
+
+            ontologies: dict[str, dict[str, object]] = await asyncio.to_thread(_read_file)
+
+            # Update the entry
+            ontologies[cleaned_name] = {
+                'entity_types': entity_types,
+                'edge_types': edge_types,
+                'edge_type_map': edge_type_map,
+            }
+
+            # Ensure directory exists and write back atomically
+            os.makedirs(os.path.dirname(ONTOLOGIES_FILE), exist_ok=True)
+
+            def _write_file(data: dict[str, dict[str, object]]) -> None:
+                with open(ONTOLOGIES_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False, sort_keys=True)
+
+            await asyncio.to_thread(_write_file, ontologies)
+
+        return SuccessResponse(message=f"Ontology '{cleaned_name}' registered successfully")
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error registering ontology: {error_msg}')
+        return ErrorResponse(error=f'Error registering ontology: {error_msg}')
 
 
 @mcp.resource('http://graphiti/status')
