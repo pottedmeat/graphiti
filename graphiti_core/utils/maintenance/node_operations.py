@@ -187,11 +187,23 @@ async def resolve_extracted_nodes(
     episode: EpisodicNode | None = None,
     previous_episodes: list[EpisodicNode] | None = None,
     entity_types: dict[str, type[BaseModel]] | None = None,
+    exclude_entity_types_from_dedupe_search: list[str] | None = None,
     existing_nodes_override: list[EntityNode] | None = None,
     resolve_duplicate: Optional[Callable[[EntityNode], Optional[EntityNode]]] = None,
 ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
     llm_client = clients.llm_client
     driver = clients.driver
+
+    # Determine candidate entity types for dedupe search, excluding any provided
+    candidate_entity_types: list[str] | None = (
+        list(entity_types.keys()) if entity_types is not None else None
+    )
+    if candidate_entity_types is not None and exclude_entity_types_from_dedupe_search:
+        candidate_entity_types = [
+            et for et in candidate_entity_types if et not in exclude_entity_types_from_dedupe_search
+        ]
+        if len(candidate_entity_types) == 0:
+            candidate_entity_types = None
 
     search_results: list[SearchResults] = await semaphore_gather(
         *[
@@ -199,7 +211,9 @@ async def resolve_extracted_nodes(
                 clients=clients,
                 query=node.name,
                 group_ids=[node.group_id],
-                search_filter=SearchFilters(),
+                search_filter=SearchFilters(
+                    node_labels=candidate_entity_types,
+                ),
                 config=NODE_HYBRID_SEARCH_RRF,
             )
             for node in extracted_nodes
@@ -211,6 +225,10 @@ async def resolve_extracted_nodes(
         if existing_nodes_override is None
         else existing_nodes_override
     )
+
+    # In case entity_types wasn't provided, but exclude_entity_types_from_dedupe_search was, remove them here
+    if exclude_entity_types_from_dedupe_search:
+        candidate_nodes = [node for node in candidate_nodes if node.labels not in exclude_entity_types_from_dedupe_search]
 
     existing_nodes_dict: dict[str, EntityNode] = {node.uuid: node for node in candidate_nodes}
 
@@ -263,6 +281,8 @@ async def resolve_extracted_nodes(
 
     node_resolutions: list[NodeDuplicate] = NodeResolutions(**llm_response).entity_resolutions
 
+    resolved_nodes: list[EntityNode] = []
+    uuid_map: dict[str, str] = {}
     node_duplicates: list[tuple[EntityNode, EntityNode]] = []
     for resolution in node_resolutions:
         resolution_id: int = resolution.id

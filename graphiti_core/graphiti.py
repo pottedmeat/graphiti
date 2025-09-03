@@ -396,6 +396,7 @@ class Graphiti:
         update_communities: bool = False,
         entity_types: dict[str, type[BaseModel]] | None = None,
         excluded_entity_types: list[str] | None = None,
+        exclude_entity_types_from_dedupe_search: list[str] | None = None,
         previous_episode_uuids: list[str] | None = None,
         edge_types: dict[str, type[BaseModel]] | None = None,
         edge_type_map: dict[tuple[str, str], list[str]] | None = None,
@@ -514,6 +515,7 @@ class Graphiti:
                     episode,
                     previous_episodes,
                     entity_types,
+                    exclude_entity_types_from_dedupe_search=exclude_entity_types_from_dedupe_search,
                     resolve_duplicate=resolve_duplicate,
                 ),
                 extract_edges(
