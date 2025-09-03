@@ -190,6 +190,7 @@ async def resolve_extracted_nodes(
     exclude_entity_types_from_dedupe_search: list[str] | None = None,
     existing_nodes_override: list[EntityNode] | None = None,
     resolve_duplicate: Optional[Callable[[EntityNode, list[EntityNode]], Optional[EntityNode]]] = None,
+    add_missing_nodes: Optional[Callable[[list[EntityNode]], list[EntityNode]]] = None,
 ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
     llm_client = clients.llm_client
     driver = clients.driver
@@ -296,7 +297,7 @@ async def resolve_extracted_nodes(
             else extracted_node
         )
 
-        # If no duplicate was found, optionally resolve it through a callback
+        # If no existing node was found, optionally resolve it through a callback
         if resolved_node is extracted_node and resolve_duplicate is not None:
             resolved_node = resolve_duplicate(extracted_node, resolved_nodes)
             if resolved_node is None:
@@ -317,6 +318,12 @@ async def resolve_extracted_nodes(
             existing_node = existing_nodes[idx] if idx < len(existing_nodes) else resolved_node
 
             node_duplicates.append((extracted_node, existing_node))
+
+    if add_missing_nodes is not None:
+        missing_nodes = add_missing_nodes(resolved_nodes)
+        for missing_node in missing_nodes:
+            resolved_nodes.append(missing_node)
+            uuid_map[missing_node.uuid] = missing_node.uuid
 
     logger.debug(f'Resolved nodes: {[(n.name, n.uuid) for n in resolved_nodes]}')
 

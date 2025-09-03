@@ -401,6 +401,7 @@ class Graphiti:
         edge_types: dict[str, type[BaseModel]] | None = None,
         edge_type_map: dict[tuple[str, str], list[str]] | None = None,
         resolve_duplicate: Optional[Callable[[EntityNode, list[EntityNode]], Optional[EntityNode]]] = None,
+        add_missing_nodes: Optional[Callable[[list[EntityNode]], list[EntityNode]]] = None,
     ) -> AddEpisodeResults:
         """
         Process an episode and update the graph.
@@ -517,6 +518,7 @@ class Graphiti:
                     entity_types,
                     exclude_entity_types_from_dedupe_search=exclude_entity_types_from_dedupe_search,
                     resolve_duplicate=resolve_duplicate,
+                    add_missing_nodes=add_missing_nodes,
                 ),
                 extract_edges(
                     self.clients,
