@@ -188,36 +188,10 @@ async def resolve_extracted_nodes(
     previous_episodes: list[EpisodicNode] | None = None,
     entity_types: dict[str, type[BaseModel]] | None = None,
     existing_nodes_override: list[EntityNode] | None = None,
-    excluded_dedupe_entity_types: list[str] | None = None,
     resolve_duplicate: Optional[Callable[[EntityNode], Optional[EntityNode]]] = None,
 ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
     llm_client = clients.llm_client
     driver = clients.driver
-
-    resolvable_nodes: list[tuple[int, EntityNode]] = []
-    resolved_nodes: list[EntityNode] = []
-    uuid_map: dict[str, str] = {}
-    for i, node in enumerate(extracted_nodes):
-        entity_type_labels = [label for label in node.labels if label != 'Entity']
-
-        # Determine exclusion conditions if there is a label and it's not in the entity types
-        not_in_entity_types = (
-            (entity_types is not None)
-            and len(entity_type_labels) > 0
-            and any(label not in entity_types.keys() for label in entity_type_labels)
-        )
-
-        in_excluded_dedupe_entity_types = (
-            (excluded_dedupe_entity_types is not None)
-            and any(label in excluded_dedupe_entity_types for label in entity_type_labels)
-        )
-
-        # If not a recognized entity type, or dedupe exclusion applies, map to itself (no remap)
-        if not_in_entity_types or in_excluded_dedupe_entity_types:
-            resolved_nodes.append(node)
-            uuid_map[node.uuid] = node.uuid
-        else:
-            resolvable_nodes.append((i, node))
 
     search_results: list[SearchResults] = await semaphore_gather(
         *[
@@ -225,12 +199,10 @@ async def resolve_extracted_nodes(
                 clients=clients,
                 query=node.name,
                 group_ids=[node.group_id],
-                search_filter=SearchFilters(
-                    node_labels=list(entity_types.keys()) if entity_types is not None else None,
-                ),
+                search_filter=SearchFilters(),
                 config=NODE_HYBRID_SEARCH_RRF,
             )
-            for _, node in resolvable_nodes
+            for node in extracted_nodes
         ]
     )
 
@@ -271,7 +243,7 @@ async def resolve_extracted_nodes(
             ).__doc__
             or 'Default Entity Type',
         }
-        for i, node in resolvable_nodes
+        for i, node in enumerate(extracted_nodes)
     ]
 
     context = {
@@ -310,9 +282,6 @@ async def resolve_extracted_nodes(
             if resolved_node is None:
                 # Skip this node entirely
                 continue
-
-        if (excluded_dedupe_entity_types is not None and any(label in excluded_dedupe_entity_types for label in resolved_node.labels)):
-            continue
 
         # resolved_node.name = resolution.get('name')
 
