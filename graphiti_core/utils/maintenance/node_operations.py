@@ -16,7 +16,7 @@ limitations under the License.
 
 import logging
 from time import time
-from typing import Any
+from typing import Any, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -189,6 +189,7 @@ async def resolve_extracted_nodes(
     entity_types: dict[str, type[BaseModel]] | None = None,
     existing_nodes_override: list[EntityNode] | None = None,
     excluded_dedupe_entity_types: list[str] | None = None,
+    resolve_duplicate: Optional[Callable[[EntityNode], Optional[EntityNode]]] = None,
 ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
     llm_client = clients.llm_client
     driver = clients.driver
@@ -302,6 +303,13 @@ async def resolve_extracted_nodes(
             if 0 <= duplicate_idx < len(existing_nodes)
             else extracted_node
         )
+
+        # If no duplicate was found, optionally resolve it through a callback
+        if resolved_node is extracted_node and resolve_duplicate is not None:
+            resolved_node = resolve_duplicate(extracted_node)
+            if resolved_node is None:
+                # Skip this node entirely
+                continue
 
         if (excluded_dedupe_entity_types is not None and any(label in excluded_dedupe_entity_types for label in resolved_node.labels)):
             continue
