@@ -189,7 +189,7 @@ async def resolve_extracted_nodes(
     entity_types: dict[str, type[BaseModel]] | None = None,
     exclude_entity_types_from_dedupe_search: list[str] | None = None,
     existing_nodes_override: list[EntityNode] | None = None,
-    resolve_duplicate: Optional[Callable[[EntityNode], Optional[EntityNode]]] = None,
+    resolve_duplicate: Optional[Callable[[EntityNode, list[EntityNode]], Optional[EntityNode]]] = None,
 ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
     llm_client = clients.llm_client
     driver = clients.driver
@@ -298,7 +298,7 @@ async def resolve_extracted_nodes(
 
         # If no duplicate was found, optionally resolve it through a callback
         if resolved_node is extracted_node and resolve_duplicate is not None:
-            resolved_node = resolve_duplicate(extracted_node)
+            resolved_node = resolve_duplicate(extracted_node, resolved_nodes)
             if resolved_node is None:
                 # Skip this node entirely
                 continue

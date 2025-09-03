@@ -400,7 +400,7 @@ class Graphiti:
         previous_episode_uuids: list[str] | None = None,
         edge_types: dict[str, type[BaseModel]] | None = None,
         edge_type_map: dict[tuple[str, str], list[str]] | None = None,
-        resolve_duplicate: Optional[Callable[[EntityNode], Optional[EntityNode]]] = None,
+        resolve_duplicate: Optional[Callable[[EntityNode, list[EntityNode]], Optional[EntityNode]]] = None,
     ) -> AddEpisodeResults:
         """
         Process an episode and update the graph.
