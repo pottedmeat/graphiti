@@ -302,6 +302,8 @@ async def resolve_extracted_nodes(
             if resolved_node is None:
                 # Skip this node entirely
                 continue
+            if resolved_node in resolved_nodes:
+                continue
 
         # resolved_node.name = resolution.get('name')
 
